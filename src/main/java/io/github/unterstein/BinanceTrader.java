@@ -45,10 +45,7 @@ public class BinanceTrader {
       double profitablePrice = buyPrice + (buyPrice * tradeProfit / 100);
 
 
-      logger.info(String.format("buyPrice:%.8f sellPrice:%.8f bid:%.8f ask:%.8f price:%.8f profit:%.8f diff:%.8f\n", buyPrice, sellPrice, lastAsk, lastAsk, lastPrice, profitablePrice, (lastAsk - profitablePrice)));
-
       if (orderId == null) {
-        logger.info("nothing bought, let`s check");
         // find a burst to buy
         // but make sure price is ascending!
         if (lastAsk >= profitablePrice) {
@@ -108,7 +105,7 @@ public class BinanceTrader {
           } else {
             panicSellCounter++;
             logger.info(String.format("sell request not successful, increasing time %d\n", panicSellCounter));
-            if (panicSellCounter > 3) {
+            if (panicSellCounter > 30) {
               client.panicSell(lastKnownTradingBalance, lastPrice);
               clear();
             }
