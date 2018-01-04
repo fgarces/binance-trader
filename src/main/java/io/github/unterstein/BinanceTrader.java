@@ -5,6 +5,7 @@ import com.binance.api.client.domain.account.AssetBalance;
 import com.binance.api.client.domain.account.Order;
 import com.binance.api.client.domain.market.OrderBook;
 
+import com.binance.api.client.domain.market.OrderBookEntry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,7 +35,7 @@ public class BinanceTrader {
 
   void tick() {
     try {
-      OrderBook orderBook = client.getOrderBook();
+      OrderBook orderBook = client.getOrderBook(10);
       double lastPrice = client.lastPrice();
       AssetBalance tradingBalance = client.getTradingBalance();
       double lastKnownTradingBalance = client.getAllTradingBalance();
@@ -44,6 +45,7 @@ public class BinanceTrader {
       double sellPrice = lastAsk - tradeDifference;
       double profitablePrice = buyPrice + (buyPrice * tradeProfit / 100);
 
+      logger.info("Base Balance: " + client.getBaseBalance().getFree());
 
       if (orderId == null) {
         // find a burst to buy
@@ -59,7 +61,7 @@ public class BinanceTrader {
             logger.warn("woooops, price is falling?!? don`t do something!");
           }
         } else {
-          logger.info(String.format("No profit detected, difference %.8f\n", lastAsk - profitablePrice));
+          logger.info(String.format("No profit detected, difference %.8f", lastAsk - profitablePrice));
           currentlyBoughtPrice = null;
         }
         trackingLastPrice = lastPrice;
@@ -74,7 +76,7 @@ public class BinanceTrader {
             if (status == OrderStatus.NEW) {
               // nothing happened here, maybe cancel as well?
               panicBuyCounter++;
-              logger.info(String.format("order still new, time %d\n", panicBuyCounter));
+              logger.info(String.format("order still new, time %d", panicBuyCounter));
               if (panicBuyCounter > 4) {
                 client.cancelOrder(orderId);
                 clear();
@@ -87,11 +89,19 @@ public class BinanceTrader {
                 logger.info("partially filled - hodl");
               } else if (status == OrderStatus.FILLED) {
                 logger.info("Order filled");
-                if (lastAsk >= profitablePrice) {
+                int profitableAsks = 0;
+                for(OrderBookEntry entry : orderBook.getAsks()) {
+                  double currentAsk = Double.valueOf(entry.getPrice());
+                  if (currentAsk >= profitablePrice) {
+                    profitableAsks++;
+                  }
+                }
+
+                if (lastAsk >= profitablePrice && profitableAsks > 3) {
                   logger.info("still gaining profitable profits HODL!!");
                 } else {
                   logger.info("Not gaining enough profit anymore, let`s sell");
-                  logger.info(String.format("Bought %d for %.8f and sell it for %.8f, this is %.8f coins profit", tradeAmount, currentlyBoughtPrice, (1.0 * currentlyBoughtPrice - sellPrice) * tradeAmount));
+                  logger.info(String.format("Bought %d for %.8f and sell it for %.8f, this is %.8f coins profit", tradeAmount, sellPrice, currentlyBoughtPrice, (1.0 * currentlyBoughtPrice - sellPrice) * tradeAmount));
                   client.sell(tradeAmount, sellPrice);
                 }
               } else {
@@ -104,17 +114,14 @@ public class BinanceTrader {
             }
           } else {
             panicSellCounter++;
-            logger.info(String.format("sell request not successful, increasing time %d\n", panicSellCounter));
-            if (panicSellCounter > 30) {
-              client.panicSell(lastKnownTradingBalance, lastPrice);
-              clear();
-            }
+            logger.info(String.format("sell request not successful, increasing time %d", panicSellCounter));
           }
         } else {
           logger.warn("Order was canceled, cleaning up.");
           clear(); // Order was canceled, so clear and go on
         }
       }
+
     } catch (Exception e) {
       logger.error("Unable to perform ticker", e);
     }

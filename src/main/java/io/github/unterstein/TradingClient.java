@@ -40,6 +40,10 @@ public class TradingClient {
     return client.getOrderBook(symbol, 5);
   }
 
+  public OrderBook getOrderBook(Integer limit) {
+    return client.getOrderBook(symbol, limit);
+  }
+
   public AssetBalance getBaseBalance() {
     return client.getAccount().getAssetBalance(baseCurrency);
   }
