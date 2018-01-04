@@ -76,7 +76,7 @@ public class BinanceTrader {
               // nothing happened here, maybe cancel as well?
               panicBuyCounter++;
               logger.info(String.format("order still new, time %d", panicBuyCounter));
-              if (panicBuyCounter > 15) {
+              if (panicBuyCounter > 10) {
                 client.cancelOrder(orderId);
                 clear();
               }
