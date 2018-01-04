@@ -71,13 +71,12 @@ public class BinanceTrader {
         if (status != OrderStatus.CANCELED) {
           // not new and not canceled, check for profit
           logger.info("Tradingbalance: " + tradingBalance);
-          if ("0".equals("" + tradingBalance.getLocked().charAt(0)) &&
-              lastAsk >= currentlyBoughtPrice) {
+          if ("0".equals("" + tradingBalance.getLocked().charAt(0)) && lastAsk >= currentlyBoughtPrice) {
             if (status == OrderStatus.NEW) {
               // nothing happened here, maybe cancel as well?
               panicBuyCounter++;
               logger.info(String.format("order still new, time %d", panicBuyCounter));
-              if (panicBuyCounter > 4) {
+              if (panicBuyCounter > 15) {
                 client.cancelOrder(orderId);
                 clear();
               }
@@ -97,7 +96,7 @@ public class BinanceTrader {
                   }
                 }
 
-                if (lastAsk >= profitablePrice && profitableAsks > 3) {
+                if (lastAsk >= profitablePrice && profitableAsks > 5) {
                   logger.info("still gaining profitable profits HODL!!");
                 } else {
                   logger.info("Not gaining enough profit anymore, let`s sell");
@@ -115,6 +114,7 @@ public class BinanceTrader {
           } else {
             panicSellCounter++;
             logger.info(String.format("sell request not successful, increasing time %d", panicSellCounter));
+            client.sell(tradeAmount, profitablePrice);
           }
         } else {
           logger.warn("Order was canceled, cleaning up.");
