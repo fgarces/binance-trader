@@ -114,7 +114,10 @@ public class BinanceTrader {
           } else {
             panicSellCounter++;
             logger.info(String.format("sell request not successful, increasing time %d", panicSellCounter));
-            client.sell(tradeAmount, profitablePrice);
+            if (panicSellCounter > 160) {
+              client.sell(tradeAmount, profitablePrice);
+              clear();
+            }
           }
         } else {
           logger.warn("Order was canceled, cleaning up.");
