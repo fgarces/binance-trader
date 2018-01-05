@@ -83,11 +83,11 @@ public class TradingClient {
     return client.newOrder(order);
   }
 
-  public void sell(int quantity, double price) {
+  public NewOrderResponse sell(int quantity, double price) {
     String priceString = String.format("%.8f", price).replace(",", ".");
     logger.info(String.format("Selling %d for %s\n", quantity, priceString));
     NewOrder order = new NewOrder(symbol, OrderSide.SELL, OrderType.LIMIT, TimeInForce.GTC, "" + quantity, priceString);
-    client.newOrder(order);
+    return client.newOrder(order);
   }
 
   public void sellMarket(int quantity) {

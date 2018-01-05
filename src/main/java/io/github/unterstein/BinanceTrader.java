@@ -24,6 +24,7 @@ public class BinanceTrader {
   private int panicSellCounter;
   private String tradeCurrency;
   private double trackingLastPrice;
+  private Long sellOrderId;
 
   BinanceTrader(double tradeDifference, double tradeProfit, int tradeAmount, String baseCurrency, String tradeCurrency, String key, String secret) {
     client = new TradingClient(baseCurrency, tradeCurrency, key, secret);
@@ -49,81 +50,74 @@ public class BinanceTrader {
 
       logger.info("Base Balance: " + client.getBaseBalance().getFree() + ". Trading: " + tradeCurrency);
 
-      if (orderId == null) {
-        // find a burst to buy
-        // but make sure price is ascending!
-        if (lastAsk >= profitablePrice) {
-          if (lastPrice > trackingLastPrice) {
-            logger.info("Buy detected");
-            currentlyBoughtPrice = profitablePrice;
-            orderId = client.buy(tradeAmount, buyPrice).getOrderId();
-            panicBuyCounter = 0;
-            panicSellCounter = 0;
-          } else {
-            logger.warn("woooops, price is falling?!? don`t do something!");
-          }
-        } else {
-          logger.info(String.format("No profit detected, difference %.8f", lastAsk - profitablePrice));
-          currentlyBoughtPrice = null;
-        }
-        trackingLastPrice = lastPrice;
-      } else {
-        Order order = client.getOrder(orderId);
-        OrderStatus status = order.getStatus();
-        if (status != OrderStatus.CANCELED) {
-          // not new and not canceled, check for profit
-          logger.info("Tradingbalance: " + tradingBalance);
-          if ("0".equals("" + tradingBalance.getLocked().charAt(0)) && lastAsk >= currentlyBoughtPrice) {
-            if (status == OrderStatus.NEW) {
-              // nothing happened here, maybe cancel as well?
-              panicBuyCounter++;
-              logger.info(String.format("order still new, time %d", panicBuyCounter));
-              if (panicBuyCounter > 10) {
-                client.cancelOrder(orderId);
-                clear();
-              }
-            } else {
-              if ("0".equals("" + tradingBalance.getFree().charAt(0))) {
-                logger.warn("no balance in trading money, clearing out");
-                clear();
-              } else if (status == OrderStatus.PARTIALLY_FILLED) {
-                logger.info("partially filled - hodl");
-              } else if (status == OrderStatus.FILLED) {
-                logger.info("Order filled");
-                int profitableAsks = 0;
-                for(OrderBookEntry entry : orderBook.getAsks()) {
-                  double currentAsk = Double.valueOf(entry.getPrice());
-                  if (currentAsk >= profitablePrice) {
-                    profitableAsks++;
-                  }
-                }
 
-                if (lastAsk >= profitablePrice && profitableAsks > 6) {
-                  logger.info("still gaining profitable profits HODL!! Last ask: " + lastAsk);
-                } else {
-                  logger.info("Not gaining enough profit anymore, let`s sell");
-                  logger.info(String.format("Bought %d for %.8f and sell it for %.8f, this is %.8f coins profit", tradeAmount, sellPrice, currentlyBoughtPrice, (1.0 * currentlyBoughtPrice - sellPrice) * tradeAmount));
-                  client.sell(tradeAmount, sellPrice);
-                }
-              } else {
-                // WTF?!
-                logger.error("DETECTED WTF!!!!!");
-                logger.error("Order: " + order);
-                client.panicSell(lastKnownTradingBalance, lastPrice);
-                clear();
-              }
-            }
-          } else {
-            panicSellCounter++;
-            logger.info(String.format("sell request not successful, increasing time %d", panicSellCounter));
-            if (panicSellCounter > 160) {
-              client.sell(tradeAmount, profitablePrice);
+      if (orderId == null && lastAsk >= profitablePrice && lastPrice > trackingLastPrice) {
+        logger.info("Buy detected");
+        currentlyBoughtPrice = profitablePrice;
+        orderId = client.buy(tradeAmount, buyPrice).getOrderId();
+        panicBuyCounter = 0;
+        panicSellCounter = 0;
+        trackingLastPrice = lastPrice;
+      }
+
+      // Return if we haven't bough anything...
+      if (orderId == null) { return; }
+
+      if (sellOrderId != null) {
+        Order sellOrder = client.getOrder(sellOrderId);
+        OrderStatus sellStatus = sellOrder.getStatus();
+        if (sellStatus == OrderStatus.FILLED) {
+          clear();
+        } else {
+          logger.info("Waiting to sell order " + sellOrderId);
+        }
+      } else {
+        Order buyOrder = client.getOrder(orderId);
+        OrderStatus buyStatus = buyOrder.getStatus();
+
+        if (buyStatus == OrderStatus.CANCELED) {
+          logger.warn("Order was canceled, cleaning up.");
+          clear();
+          return;
+        }
+
+        if (lastAsk >= currentlyBoughtPrice) {
+          if (buyStatus == OrderStatus.NEW) {
+            // nothing happened here, maybe cancel as well?
+            panicBuyCounter++;
+            logger.info(String.format("order still new, time %d", panicBuyCounter));
+            if (panicBuyCounter > 10) {
+              client.cancelOrder(orderId);
               clear();
             }
+          } else {
+            if (buyStatus == OrderStatus.PARTIALLY_FILLED) {
+              logger.info("partially filled - hodl");
+            } else if (buyStatus == OrderStatus.FILLED) {
+              logger.info("Order filled");
+              int profitableAsks = 0;
+              for(OrderBookEntry entry : orderBook.getBids()) {
+                double currentAsk = Double.valueOf(entry.getPrice());
+                if (currentAsk >= profitablePrice) {
+                  profitableAsks++;
+                }
+              }
+
+              if (lastAsk >= profitablePrice && profitableAsks > 3) {
+                logger.info("still gaining profitable profits HODL!! Last ask: " + lastAsk);
+              } else {
+                logger.info("Not gaining enough profit anymore, let`s sell");
+                logger.info(String.format("Bought %d for %.8f and sell it for %.8f, this is %.8f coins profit", tradeAmount, sellPrice, currentlyBoughtPrice, (1.0 * currentlyBoughtPrice - sellPrice) * tradeAmount));
+                sellOrderId = client.sell(tradeAmount, sellPrice).getOrderId();
+              }
+            }
           }
         } else {
-          logger.warn("Order was canceled, cleaning up.");
-          clear(); // Order was canceled, so clear and go on
+          if (buyStatus != OrderStatus.NEW) {
+            int trading = Double.valueOf(tradingBalance.getFree()).intValue();
+            logger.info("Trading: " + trading + " for : " + profitablePrice);
+            sellOrderId = client.sell(trading, profitablePrice).getOrderId();
+          }
         }
       }
 
@@ -136,6 +130,7 @@ public class BinanceTrader {
     panicBuyCounter = 0;
     panicSellCounter = 0;
     orderId = null;
+    sellOrderId = null;
     currentlyBoughtPrice = null;
   }
 }
