@@ -98,8 +98,8 @@ public class BinanceTrader {
                   }
                 }
 
-                if (lastAsk >= profitablePrice && profitableAsks > 5) {
-                  logger.info("still gaining profitable profits HODL!!");
+                if (lastAsk >= profitablePrice && profitableAsks > 6) {
+                  logger.info("still gaining profitable profits HODL!! Last ask: " + lastAsk);
                 } else {
                   logger.info("Not gaining enough profit anymore, let`s sell");
                   logger.info(String.format("Bought %d for %.8f and sell it for %.8f, this is %.8f coins profit", tradeAmount, sellPrice, currentlyBoughtPrice, (1.0 * currentlyBoughtPrice - sellPrice) * tradeAmount));
