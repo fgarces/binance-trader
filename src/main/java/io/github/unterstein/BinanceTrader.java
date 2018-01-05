@@ -22,11 +22,13 @@ public class BinanceTrader {
   private Long orderId;
   private int panicBuyCounter;
   private int panicSellCounter;
+  private String tradeCurrency;
   private double trackingLastPrice;
 
   BinanceTrader(double tradeDifference, double tradeProfit, int tradeAmount, String baseCurrency, String tradeCurrency, String key, String secret) {
     client = new TradingClient(baseCurrency, tradeCurrency, key, secret);
     trackingLastPrice = client.lastPrice();
+    this.tradeCurrency = tradeCurrency;
     this.tradeAmount = tradeAmount;
     this.tradeProfit = tradeProfit;
     this.tradeDifference = tradeDifference;
@@ -45,7 +47,7 @@ public class BinanceTrader {
       double sellPrice = lastAsk - tradeDifference;
       double profitablePrice = buyPrice + (buyPrice * tradeProfit / 100);
 
-      logger.info("Base Balance: " + client.getBaseBalance().getFree());
+      logger.info("Base Balance: " + client.getBaseBalance().getFree() + ". Trading: " + tradeCurrency);
 
       if (orderId == null) {
         // find a burst to buy
